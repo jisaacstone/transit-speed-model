@@ -1,0 +1,4 @@
+Dwell Times:
+
+Higher usage increases dwell time.
+Ticketing, boarding procedures, number and size of doors, and station design all affect dwell times.
