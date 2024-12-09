@@ -16,7 +16,6 @@ type Trip = {
   time: number;
 }
 
-
 const timeBetweenStops = (train: TrainStats, dist: number): number => {
   // t = (mA/a)
   const timeToTopSpeed = train.topSpeed / train.acc;
@@ -32,17 +31,17 @@ const timeBetweenStops = (train: TrainStats, dist: number): number => {
     (remainingDist / train.topSpeed);
 };
 
-const tripTime = (stops: number, train: TrainStats, line: LineStats): number => {
-  const tween = timeBetweenStops(train, line.stopDist);
+const tripTime = (stops: number, tween: number, train: TrainStats, line: LineStats): number => {
   return (tween * stops) +
     (train.dwell * (stops - 1)) +
     (line.freq / 2);
 };
 
 export const tripTimeTable = (train: TrainStats, line: LineStats): Trip[] => {
+  const tween = timeBetweenStops(train, line.stopDist);
   const res = Array(line.numStops);
-  for (let i=1; 1<line.numStops; i++) {
-    res[i] = { stops: i, time: tripTime(i, train, line), dist: i * line.stopDist};
+  for (let i=1; i<line.numStops; i++) {
+    res[i] = { stops: i, time: tripTime(i, tween, train, line), dist: i * line.stopDist};
   }
   return res;
 };
