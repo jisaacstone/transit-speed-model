@@ -4,13 +4,31 @@ import { State } from 'vanjs-core';
 import { tripTimeTable } from 'calc';
 const { div, input } = van.tags;
 
+const trainPresets = {
+  emu: { acc: 1, topSpeed: 53, dwell: 48 },
+  // BART's default is PL2 which 3mph per second acceleration and a top speed of 70mph
+  bart: { dwell: 20, topSpeed: 31, acc: 1.3 },
+  // Most of the orange line is in the median of an arterial road (35mph max)
+  // Seperated segmants have 55mph max (24m/s)
+  vta: { dwell: 20, topSpeed: 15, acc: 1 }
+}
+
+const linePresets = {
+  // 47.5 miles 76.4 km
+  caltrainLocal: { numStops: 22, stopDist: 3447, freq: 15 * 60},
+  // 25.4km
+  vtaOrangeLine: { numStops: 26, stopDist: 978, freq: 15 * 60 },
+  // 82 km (most trips have multiple 2 possible trains at 20 min freq)
+  bartOrangeLine: { numStops: 21, stopDist: 3904, freq: 10 * 60},
+}
+
 const state = {
-  acc: van.state(1),
-  topSpeed: van.state(40),
-  dwell: van.state(60 * 2),
-  numStops: van.state(10),
-  stopDist: van.state(1500),
-  freq: van.state(60 * 15)
+  acc: van.state(trainPresets.vta.acc),
+  topSpeed: van.state(trainPresets.vta.topSpeed),
+  dwell: van.state(trainPresets.vta.dwell),
+  numStops: van.state(linePresets.vtaOrangeLine.numStops),
+  stopDist: van.state(linePresets.vtaOrangeLine.stopDist),
+  freq: van.state(linePresets.vtaOrangeLine.freq)
 };
 const train = () => ({ acc: state.acc.val, topSpeed: state.topSpeed.val, dwell: state.dwell.val });
 const line = () => ({ numStops: state.numStops.val, stopDist: state.stopDist.val, freq: state.freq.val });
@@ -23,6 +41,7 @@ const makeInput = (name: string, range: {min: number, max: number, step: number}
       min: range.min,
       max: range.max,
       step: range.step,
+      value: stateVar.val,
       oninput: e => {
         console.log({ name, e });
         stateVar.val = e.target.value;
@@ -44,14 +63,24 @@ const makeInputs = (el: HTMLElement, graphEl: HTMLElement) => {
   );
 };
 
-const drawGraph = (el: HTMLElement) => {
-  const trips = tripTimeTable(train(), line());
-  console.log(trips);
-  const xy = trips.map((t) => [t.stops, t.dist / t.time]);
-  console.log(xy);
-  const plt = Plot.line(xy).plot()
-  el.replaceChildren(div(plt));
-};
+const drawGraph = (() => {
+  const caltrain = tripTimeTable(trainPresets.emu, linePresets.caltrainLocal);
+  const bart = tripTimeTable(trainPresets.bart, linePresets.bartOrangeLine);
+
+  return (el: HTMLElement) => {
+    const trips = tripTimeTable(train(), line());
+    console.log(trips);
+    const plt = Plot.plot({
+      marks: [
+        Plot.ruleY([0]),
+        Plot.lineY(trips, {x: "stops", y: "avgSpeed", stroke: "#212021"}),
+        Plot.lineY(caltrain, {x: "stops", y: "avgSpeed", stroke: "#F5D9E9"}),
+        Plot.lineY(bart, {x: "stops", y: "avgSpeed", stroke: "#EDD9F5"}),
+     ]
+    });
+    el.replaceChildren(div(plt));
+  };
+})();
 
 const main = () => {
   const appEl = div({id: "app"}, "HELLLO");
