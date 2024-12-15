@@ -1,0 +1,13 @@
+#in {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+}
+
+.slider .unitDisplay {
+  display: flex;
+}

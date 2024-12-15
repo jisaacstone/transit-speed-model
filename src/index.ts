@@ -1,8 +1,11 @@
 import * as Plot from "@observablehq/plot";
 import van from 'vanjs-core';
-import { State } from 'vanjs-core';
 import { tripTimeTable } from 'calc';
-const { div, input } = van.tags;
+import { makeInput } from 'input';
+import 'assets/style.css';
+const { div } = van.tags;
+
+const MS2MPH = 2.2369362920544;
 
 const trainPresets = {
   emu: { acc: 1, topSpeed: 53, dwell: 48 },
@@ -15,11 +18,11 @@ const trainPresets = {
 
 const linePresets = {
   // 47.5 miles 76.4 km
-  caltrainLocal: { numStops: 22, stopDist: 3447, freq: 15 * 60},
+  caltrainLocal: { numStops: 22, stopDist: 3447, freq: 15 },
   // 25.4km
-  vtaOrangeLine: { numStops: 26, stopDist: 978, freq: 15 * 60 },
+  vtaOrangeLine: { numStops: 26, stopDist: 978, freq: 15 },
   // 82 km (most trips have multiple 2 possible trains at 20 min freq)
-  bartOrangeLine: { numStops: 21, stopDist: 3904, freq: 10 * 60},
+  bartOrangeLine: { numStops: 21, stopDist: 3904, freq: 10 },
 }
 
 const state = {
@@ -33,33 +36,92 @@ const state = {
 const train = () => ({ acc: state.acc.val, topSpeed: state.topSpeed.val, dwell: state.dwell.val });
 const line = () => ({ numStops: state.numStops.val, stopDist: state.stopDist.val, freq: state.freq.val });
 
-const makeInput = (name: string, range: {min: number, max: number, step: number}, stateVar: State<number>, graphEl: HTMLElement) => {
-  return div(
-    div(name),
-    input({
-      type: "range",
-      min: range.min,
-      max: range.max,
-      step: range.step,
-      value: stateVar.val,
-      oninput: e => {
-        console.log({ name, e });
-        stateVar.val = e.target.value;
-        drawGraph(graphEl);
-      },
-    })
+const frequencyChart = (el: HTMLElement) => {
+  const freq = van.state(15);
+  const topSpeed = van.state(15);
+  const mph = van.derive(() => Math.round(topSpeed.val * MS2MPH));
+  const baseline = tripTimeTable(
+    { dwell: 30, topSpeed: 15, acc: 1},
+    { numStops: 20, stopDist: 1000, freq: 15}
   );
+  const chartEl = div({class: "chart"});
+  const mphEl = div(mph, "mph");
+  const updateChart = () => {
+    const trips = tripTimeTable(
+      { dwell: 30, topSpeed: topSpeed.val, acc: 1},
+      { numStops: 20, stopDist: 1000, freq: freq.val}
+    );
+    const plt = Plot.plot({
+      marks: [
+        Plot.ruleY([0]),
+        Plot.lineY(baseline, {x: "stops", y: "time", stroke: "#C1C0C1"}),
+        Plot.lineY(trips, {x: "stops", y: "time", stroke: "#212021"}),
+     ]
+    });
+    chartEl.replaceChildren(div(plt));
+  };
+  const ms = makeInput(
+    {name: "Top Speed", units: "m/s"},
+    {min: 10, max: 50, step: 2.5},
+    topSpeed,
+    updateChart
+  );
+  van.add(ms, mphEl);
+
+  van.add(
+    el,
+    chartEl,
+    ms,
+    makeInput(
+      {name: "Frequency", units: "min"},
+      {min: 2.5, max: 60, step: 2.5},
+      freq,
+      updateChart
+    ),
+  );
+  updateChart();
 };
+
 
 const makeInputs = (el: HTMLElement, graphEl: HTMLElement) => {
   van.add(
     el,
-    makeInput("Acceleration", {min: 0.1, max: 2.0, step: 0.1}, state.acc, graphEl),
-    makeInput("Top Speed", {min: 10, max: 200, step: 10}, state.topSpeed, graphEl),
-    makeInput("Dwell Time", {min: 15, max: 300, step: 15}, state.dwell, graphEl),
-    makeInput("Number of Stops", {min: 1, max: 30, step: 1}, state.numStops, graphEl),
-    makeInput("Distance Between Stops", {min: 500, max: 5000, step: 250}, state.stopDist, graphEl),
-    makeInput("Frequency", {min: 2.5, max: 60, step: 2.5}, state.freq, graphEl),
+    makeInput(
+      {name: "Acceleration", units: "m/s²"},
+      {min: 0.1, max: 2.0, step: 0.1},
+      state.acc,
+      () => drawGraph(graphEl)
+    ),
+    makeInput(
+      {name: "Top Speed", units: "m/s"},
+      {min: 10, max: 200, step: 10},
+      state.topSpeed,
+      () => drawGraph(graphEl)
+    ),
+    makeInput(
+      {name: "Dwell Time", units: "s"},
+      {min: 15, max: 100, step: 5},
+      state.dwell,
+      () => drawGraph(graphEl)
+    ),
+    makeInput(
+      {name: "Number of Stops", units: ""},
+      {min: 1, max: 30, step: 1},
+      state.numStops,
+      () => drawGraph(graphEl)
+    ),
+    makeInput(
+      {name: "Distance Between Stops", units: "m"},
+      {min: 500, max: 5000, step: 250},
+      state.stopDist,
+      () => drawGraph(graphEl)
+    ),
+    makeInput(
+      {name: "Frequency", units: "min"},
+      {min: 2.5, max: 60, step: 2.5},
+      state.freq,
+      () => drawGraph(graphEl)
+    ),
   );
 };
 
@@ -69,7 +131,6 @@ const drawGraph = (() => {
 
   return (el: HTMLElement) => {
     const trips = tripTimeTable(train(), line());
-    console.log(trips);
     const plt = Plot.plot({
       marks: [
         Plot.ruleY([0]),
@@ -83,11 +144,13 @@ const drawGraph = (() => {
 })();
 
 const main = () => {
-  const appEl = div({id: "app"}, "HELLLO");
-  const inEl = div({id: "in"}, "HELLLO");
+  const appEl = div({id: "app"});
+  const inEl = div({id: "in"});
   van.add(document.body, appEl, inEl);
   drawGraph(appEl);
   makeInputs(inEl, appEl);
+  const fEl = document.getElementById("frequency");
+  fEl && frequencyChart(fEl);
 };
 
 // see if DOM is already available

@@ -35,7 +35,7 @@ const timeBetweenStops = (train: TrainStats, dist: number): number => {
 const tripTime = (stops: number, tween: number, train: TrainStats, line: LineStats): number => {
   return (tween * stops) +
     (train.dwell * (stops - 1)) +
-    (line.freq / 2);
+    (line.freq * 30); // * 60 / 2
 };
 
 export const tripTimeTable = (train: TrainStats, line: LineStats): Trip[] => {
