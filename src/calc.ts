@@ -7,17 +7,30 @@ type TrainStats = {
 type LineStats = {
   numStops: number;
   stopDist: number;
-  freq: number;
+  tph: number;
 }
 
-type Trip = {
+type Tween = {
+  accdec: number,
+  cruise: number,
+}
+
+type TimeComponents = {
+  accdec: number,
+  cruise: number,
+  wait: number,
+  dwell: number
+}
+
+export type Trip = {
   stops: number;
   dist: number;
   time: number;
+  timeDetails: TimeComponents;
   avgSpeed: number;
 }
 
-const timeBetweenStops = (train: TrainStats, dist: number): number => {
+const timeBetweenStops = (train: TrainStats, dist: number): Tween => {
   // t = (mA/a)
   const timeToTopSpeed = train.topSpeed / train.acc;
   // d = ½at²
@@ -25,26 +38,33 @@ const timeBetweenStops = (train: TrainStats, dist: number): number => {
   const accDecDist = distToTopSpeed * 2;
   if ( dist <= accDecDist ) {
     // t = √(2d/a)
-    return Math.sqrt((4 * dist) / train.acc);
+    return { accdec: Math.sqrt((4 * dist) / train.acc), cruise: 0 };
   }
   const remainingDist = dist - accDecDist;
-  return (timeToTopSpeed * 2) +
-    (remainingDist / train.topSpeed);
+  return {
+    accdec: timeToTopSpeed * 2,
+    cruise: remainingDist / train.topSpeed
+  };
 };
 
-const tripTime = (stops: number, tween: number, train: TrainStats, line: LineStats): number => {
-  return (tween * stops) +
-    (train.dwell * (stops - 1)) +
-    (line.freq * 30); // * 60 / 2
+const tripTime = (stops: number, tween: Tween, train: TrainStats, line: LineStats): TimeComponents => {
+  const waitTime = 1800 / line.tph;
+  return {
+    accdec: tween.accdec * stops,
+    cruise: tween.cruise * stops,
+    dwell: (train.dwell * (stops - 1)),
+    wait: waitTime
+  };
 };
 
 export const tripTimeTable = (train: TrainStats, line: LineStats): Trip[] => {
   const tween = timeBetweenStops(train, line.stopDist);
   const res = Array(line.numStops);
   for (let i=1; i<line.numStops; i++) {
-    const time = tripTime(i, tween, train, line);
+    const ttime = tripTime(i, tween, train, line);
+    const time = (ttime.accdec + ttime.wait + ttime.dwell + ttime.cruise) / 60;
     const dist = i * line.stopDist;
-    res[i] = { stops: i, time, dist, avgSpeed: dist / time }
+    res[i] = { stops: i, time, timeDetails: ttime, dist, avgSpeed: dist / time }
   }
   return res;
 };

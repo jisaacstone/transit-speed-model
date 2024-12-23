@@ -7,9 +7,10 @@ export const makeInput = (
   range: {min: number, max: number, step: number},
   stateVar: State<number>,
   callback: () => any,
+  classArgs: object = {}
 ) => {
   return div(
-    {class: "slider"},
+    {class: "slider", ...classArgs},
     div({class: "label"}, display.name),
     input({
       type: "range",

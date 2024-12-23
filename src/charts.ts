@@ -39,35 +39,59 @@ export const frequencyChart = (el: HTMLElement) => {
     speed: "#AB2011",
     freq: "#3EB8B9",
   };
-  const datapoint = (tt: Trip[], index: number, title: string) => ({ title, ...tt[index]});
+  const dataset = (stops: number[], tt: Trip[]): (Trip & {component: string})[] => {
+    const data: (Trip & {component: string})[] = [];
+    stops.forEach(i => {
+      const { stops, dist, avgSpeed, timeDetails } = tt[i];
+      [ 'accdec', 'cruise', 'wait', 'dwell' ].forEach(k => data.push(
+        // @ts-ignore
+        { stops, dist, avgSpeed, time: timeDetails[k], component: k }
+      ));
+    });
+    return data;
+  }
   const updateChart = () => {
     const stops = [3, 6, 12];
-    const _diffSpeed = tripTimeTable(
+    const diffSpeed = dataset(stops, tripTimeTable(
       { dwell: 30, topSpeed: topSpeed.val, acc: 1.2},
       { numStops: 20, stopDist: 1000, tph: 2}
-    );
-    const diffSpeed = stops.map(i => datapoint(_diffSpeed, i, "speed"));
-    const _diffFreq = tripTimeTable(
+    ));
+    const diffFreq = dataset(stops, tripTimeTable(
       { dwell: 30, topSpeed: 15, acc: 1.2},
       { numStops: 20, stopDist: 1000, tph: tph.val}
-    );
-    const diffFreq = stops.map(i => datapoint(_diffFreq, i, "frequency"));
+    ));
+
+    const label = (shorthand: string) => {
+      const datastream = shorthand[0];
+      const stops = +shorthand.slice(1);
+      if (datastream === 'b') {
+        return `${stops} stops`;
+      }
+      const bl = baseline.find((b) => b && b.stops === stops);
+      const src = datastream === 's' ? diffSpeed : diffFreq;
+      // @ts-ignore
+      const ratio = src.find((b) => b && b.stops == stops).time / bl.time;
+      return `${Math.round(ratio * 100)}%`;
+    };
     const plt = Plot.plot({
       x: {
         type: 'band',
-        domain: ['3b', '3s', '3f', '6b', '6s', '6f', '12b', '12s', '12f'],
+        domain: ['b3', 's3', 'f3', 'b6', 's6', 'f6', 'b12', 's12', 'f12'],
       },
       marks: [
+        Plot.axisX({
+          tickFormat: label
+        }),
         Plot.ruleY([0]),
         Plot.barY(
           diffSpeed,
-          {x: (p) => `${p.stops}${p.title[0]}`, y: "time", fill: colors.speed}),
+          {x: (p) => `s${p.stops}`, y: "time", fill: colors.speed}),
         Plot.barY(
           diffFreq,
-          {x: (p) => `${p.stops}${p.title[0]}`, y: "time", fill: colors.freq}),
+          {x: (p) => `f${p.stops}`, y: "time", fill: colors.freq}),
         Plot.barY(
-          [3, 6, 12].map(i => datapoint(baseline, i, "baseline")),
-          {x: (p) => `${p.stops}${p.title[0]}`, y: "time", stroke: "#C1C0C1"}),
+          dataset(stops, baseline),
+          {x: (p) => `b${p.stops}`, y: "time", stroke: "#C1C0C1", fill: "component", tip: true}),
      ]
     });
     chartEl.replaceChildren(div(plt));
