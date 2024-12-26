@@ -19,7 +19,6 @@ export const makeInput = (
       step: range.step,
       value: stateVar.val,
       oninput: e => {
-        console.log({ name, e });
         stateVar.val = e.target.value;
         callback();
       },

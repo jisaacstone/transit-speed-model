@@ -6,6 +6,8 @@ import 'assets/style.css';
 const { div } = van.tags;
 
 const MS2MPH = 2.2369362920544;
+type Comp = { key: string, text: string, opacity: number }
+type FreqTrip = Trip & {component: Comp, minutes: number}
 
 const trainPresets = {
   emu: { acc: 1, topSpeed: 53, dwell: 48 },
@@ -26,12 +28,12 @@ const linePresets = {
 }
 
 export const frequencyChart = (el: HTMLElement) => {
-  const tph = van.state(2);
+  const tph = van.state(4);
   const topSpeed = van.state(15);
   const mph = van.derive(() => Math.round(topSpeed.val * MS2MPH));
   const baseline = tripTimeTable(
-    { dwell: 30, topSpeed: 15, acc: 1.2},
-    { numStops: 20, stopDist: 1000, tph: 2}
+    { dwell: 30, topSpeed: 15, acc: 1},
+    { numStops: 20, stopDist: 1000, tph: 4}
   );
   const chartEl = div({class: "chart"});
   const mphEl = div(mph, "mph");
@@ -39,28 +41,37 @@ export const frequencyChart = (el: HTMLElement) => {
     speed: "#AB2011",
     freq: "#3EB8B9",
   };
-  const dataset = (stops: number[], tt: Trip[]): (Trip & {component: string})[] => {
-    const data: (Trip & {component: string})[] = [];
+  const components: Comp[] = [
+    { key: 'wait', text: 'waiting for train', opacity: 1.0 },
+    { key: 'accdec', text: 'accelerating/decelerating', opacity: 0.8 },
+    { key: 'cruise', text: 'cruising at max speed', opacity: 0.6 },
+    { key: 'dwell', text: 'dwell time', opacity: 0.4 },
+  ];
+  const dataset = (stops: number[], tt: Trip[]): FreqTrip[] => {
+    const data: FreqTrip[] = [];
     stops.forEach(i => {
-      const { stops, dist, avgSpeed, timeDetails } = tt[i];
-      [ 'accdec', 'cruise', 'wait', 'dwell' ].forEach(k => data.push(
+      const { stops, dist, time, avgSpeed, timeDetails } = tt[i];
+      components.forEach(k => data.push(
         // @ts-ignore
-        { stops, dist, avgSpeed, time: timeDetails[k], component: k }
+        { stops, dist, avgSpeed, time, minutes: timeDetails[k.key] / 60, component: k }
       ));
     });
     return data;
   }
   const updateChart = () => {
-    const stops = [3, 6, 12];
-    const diffSpeed = dataset(stops, tripTimeTable(
-      { dwell: 30, topSpeed: topSpeed.val, acc: 1.2},
-      { numStops: 20, stopDist: 1000, tph: 2}
-    ));
-    const diffFreq = dataset(stops, tripTimeTable(
-      { dwell: 30, topSpeed: 15, acc: 1.2},
+    const dsSpeed = tripTimeTable(
+      { dwell: 30, topSpeed: topSpeed.val, acc: 1},
+      { numStops: 20, stopDist: 1000, tph: 4}
+    );
+    const dsFreq = tripTimeTable(
+      { dwell: 30, topSpeed: 15, acc: 1},
       { numStops: 20, stopDist: 1000, tph: tph.val}
-    ));
+    );
 
+    // Bar
+    const stops = [3, 6, 12];
+    const diffSpeed = dataset(stops, dsSpeed);
+    const diffFreq = dataset(stops, dsFreq);
     const label = (shorthand: string) => {
       const datastream = shorthand[0];
       const stops = +shorthand.slice(1);
@@ -70,13 +81,29 @@ export const frequencyChart = (el: HTMLElement) => {
       const bl = baseline.find((b) => b && b.stops === stops);
       const src = datastream === 's' ? diffSpeed : diffFreq;
       // @ts-ignore
-      const ratio = src.find((b) => b && b.stops == stops).time / bl.time;
+      const ratio = bl.avgSpeed / src.find((b) => b && b.stops === stops).avgSpeed;
       return `${Math.round(ratio * 100)}%`;
     };
-    const plt = Plot.plot({
+    const boxOptions = (prefix: string, color: string) => ({
+      x: ((p: Trip) => `${prefix}${p.stops}`),
+      y: "minutes",
+      // stroke: "component",
+      fillOpacity: (d: FreqTrip) => d.component.opacity,
+      fill: color,
+      tip: { format: { x: false, fillOpacity: (n: number) => components.find(c => c.opacity == n)?.text || '' } },
+    });
+    const barPlt = Plot.plot({
+      title: 'Total travel time for select trips',
+      caption: 'Move the sliders to see the effect of changing top speed or frequency',
+      className: 'plot-graph',
       x: {
         type: 'band',
         domain: ['b3', 's3', 'f3', 'b6', 's6', 'f6', 'b12', 's12', 'f12'],
+      },
+      color: {
+        domain: components.map(c => c.text),
+        range: components.map(c => `rgba(181, 180, 185, ${c.opacity})`),
+        legend: 'swatches',
       },
       marks: [
         Plot.axisX({
@@ -84,31 +111,40 @@ export const frequencyChart = (el: HTMLElement) => {
         }),
         Plot.ruleY([0]),
         Plot.barY(
-          diffSpeed,
-          {x: (p) => `s${p.stops}`, y: "time", fill: colors.speed}),
+          diffSpeed, boxOptions('s', colors.speed),
+        ),
         Plot.barY(
-          diffFreq,
-          {x: (p) => `f${p.stops}`, y: "time", fill: colors.freq}),
+          diffFreq, boxOptions('f', colors.freq),
+        ),
         Plot.barY(
-          dataset(stops, baseline),
-          {x: (p) => `b${p.stops}`, y: "time", stroke: "#C1C0C1", fill: "component", tip: true}),
+          dataset(stops, baseline), boxOptions('b', "rgba(181, 180, 185, 1)"),
+        ),
      ]
     });
-    chartEl.replaceChildren(div(plt));
+    // line
+    const linePlt = Plot.plot({
+      title: 'Average speed for all trip lengths',
+      caption: 'Average speed increases for longer trips as time waiting for the train is a lower proportion of total trip time',
+      marks: [
+        Plot.ruleY([0]),
+        Plot.lineY(baseline, {x: "stops", y: "avgSpeed", stroke: "#212021"}),
+        Plot.lineY(dsSpeed, {x: "stops", y: "avgSpeed", stroke: colors.speed}),
+        Plot.lineY(dsFreq, {x: "stops", y: "avgSpeed", stroke: colors.freq}),
+      ],
+      className: 'plot-graph',
+    });
+    chartEl.replaceChildren(div(barPlt), div(linePlt));
   };
-  const ms = makeInput(
-    {name: "Top Speed", units: "m/s"},
-    {min: 10, max: 50, step: 2.5},
-    topSpeed,
-    updateChart,
-    {"style": () => `border-left: 1em solid ${colors.speed}`}
-  );
-  van.add(ms, mphEl);
-
-  van.add(
-    el,
-    chartEl,
-    div(
+  const inEl = (() => {
+    const ms = makeInput(
+      {name: "Top Speed", units: "m/s"},
+      {min: 10, max: 50, step: 2},
+      topSpeed,
+      updateChart,
+      {"style": () => `border-left: 1em solid ${colors.speed}`}
+    );
+    van.add(ms, mphEl);
+    return div(
       {"class": "inputs"},
       ms,
       makeInput(
@@ -118,7 +154,13 @@ export const frequencyChart = (el: HTMLElement) => {
         updateChart,
         {"style": () => `border-left: 1em solid ${colors.freq}`}
       ),
-    )
+    );
+  })();
+
+  van.add(
+    el,
+    inEl,
+    chartEl,
   );
   updateChart();
 };
@@ -197,7 +239,7 @@ export const playground = (container: HTMLElement) => {
     };
   })();
 
-  van.add(container, chartEl, inputsEl);
+  van.add(container, inputsEl, chartEl);
   makeInputs(inputsEl, chartEl);
   drawGraph(chartEl);
 };
