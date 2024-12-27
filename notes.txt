@@ -4,7 +4,12 @@ Higher usage increases dwell time.
 Ticketing, boarding procedures, number and size of doors, and station design all affect dwell times.
 
 Orange Line
+Most of the orange line is in the median of an arterial road (35mph max)
 first train - MV 5:21 AR 6:13 - 52 minutes
 commuter train - 8:33 - 9:32 - 59 minutes
 26 stops
 ~ 2 minutes / stop
+
+
+ BART's default is PL2 which 3mph per second acceleration and a top speed of 70mph
+ Seperated segmants have 55mph max (24m/s)

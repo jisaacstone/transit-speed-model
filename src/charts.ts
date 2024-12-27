@@ -90,7 +90,7 @@ export const frequencyChart = (el: HTMLElement) => {
       // stroke: "component",
       fillOpacity: (d: FreqTrip) => d.component.opacity,
       fill: color,
-      tip: { format: { x: false, fillOpacity: (n: number) => components.find(c => c.opacity == n)?.text || '' } },
+      tip: { channels: {component: (d: FreqTrip) => d.component.text}, format: { x: false, fillOpacity: false } },
     });
     const barPlt = Plot.plot({
       title: 'Total travel time for select trips',
@@ -122,14 +122,15 @@ export const frequencyChart = (el: HTMLElement) => {
      ]
     });
     // line
+    const addMPH = (d: Trip) => ({ ...d, 'MPH': d.avgSpeed / 60 * MS2MPH });
     const linePlt = Plot.plot({
       title: 'Average speed for all trip lengths',
       caption: 'Average speed increases for longer trips as time waiting for the train is a lower proportion of total trip time',
       marks: [
         Plot.ruleY([0]),
-        Plot.lineY(baseline, {x: "stops", y: "avgSpeed", stroke: "#212021"}),
-        Plot.lineY(dsSpeed, {x: "stops", y: "avgSpeed", stroke: colors.speed}),
-        Plot.lineY(dsFreq, {x: "stops", y: "avgSpeed", stroke: colors.freq}),
+        Plot.lineY(baseline.map(addMPH), {x: "stops", y: 'MPH', stroke: "#212021"}),
+        Plot.lineY(dsSpeed.map(addMPH), {x: "stops", y: 'MPH', stroke: colors.speed}),
+        Plot.lineY(dsFreq.map(addMPH), {x: "stops", y: 'MPH', stroke: colors.freq}),
       ],
       className: 'plot-graph',
     });
@@ -169,12 +170,12 @@ export const playground = (container: HTMLElement) => {
   const inputsEl = div({"class": "inputs"});
   const chartEl = div({"class": "chart"});
   const state = {
-    acc: van.state(trainPresets.vta.acc),
-    topSpeed: van.state(trainPresets.vta.topSpeed),
-    dwell: van.state(trainPresets.vta.dwell),
-    numStops: van.state(linePresets.vtaOrangeLine.numStops),
-    stopDist: van.state(linePresets.vtaOrangeLine.stopDist),
-    tph: van.state(linePresets.vtaOrangeLine.tph)
+    acc: van.state(1),
+    topSpeed: van.state(12),
+    dwell: van.state(15),
+    numStops: van.state(20),
+    stopDist: van.state(1000),
+    tph: van.state(1)
   };
   const train = () => ({ acc: state.acc.val, topSpeed: state.topSpeed.val, dwell: state.dwell.val });
   const line = () => ({ numStops: state.numStops.val, stopDist: state.stopDist.val, tph: state.tph.val });
@@ -190,30 +191,30 @@ export const playground = (container: HTMLElement) => {
       ),
       makeInput(
         {name: "Top Speed", units: "m/s"},
-        {min: 10, max: 200, step: 10},
+        {min: 10, max: 100, step: 5},
         state.topSpeed,
         () => drawGraph(graphEl)
       ),
       makeInput(
-        {name: "Dwell Time", units: "s"},
-        {min: 15, max: 100, step: 5},
+        {name: "Dwell Time", units: "seconds"},
+        {min: 10, max: 100, step: 5},
         state.dwell,
         () => drawGraph(graphEl)
       ),
       makeInput(
         {name: "Number of Stops", units: ""},
-        {min: 1, max: 30, step: 1},
+        {min: 2, max: 30, step: 1},
         state.numStops,
         () => drawGraph(graphEl)
       ),
       makeInput(
-        {name: "Distance Between Stops", units: "m"},
+        {name: "Distance Between Stops", units: "meters"},
         {min: 500, max: 5000, step: 250},
         state.stopDist,
         () => drawGraph(graphEl)
       ),
       makeInput(
-        {name: "Frequency", units: "min"},
+        {name: "Frequency", units: "trains/hour"},
         {min: 1, max: 20, step: 1},
         state.tph,
         () => drawGraph(graphEl)
@@ -224,15 +225,27 @@ export const playground = (container: HTMLElement) => {
   const drawGraph = (() => {
     const caltrain = tripTimeTable(trainPresets.emu, linePresets.caltrainLocal);
     const bart = tripTimeTable(trainPresets.bart, linePresets.bartOrangeLine);
+    const vta = tripTimeTable(trainPresets.vta, linePresets.vtaOrangeLine);
+    const colors = {
+      'caltrain': '#F5D9E9',
+      'bart': '#EDD9F3',
+      'vta light rail': '#DDE5F9',
+    };
 
     return (el: HTMLElement) => {
       const trips = tripTimeTable(train(), line());
       const plt = Plot.plot({
+        color: {
+          domain: Object.keys(colors),
+          range: Object.values(colors),
+        },
         marks: [
           Plot.ruleY([0]),
           Plot.lineY(trips, {x: "stops", y: "avgSpeed", stroke: "#212021"}),
-          Plot.lineY(caltrain, {x: "stops", y: "avgSpeed", stroke: "#F5D9E9"}),
-          Plot.lineY(bart, {x: "stops", y: "avgSpeed", stroke: "#EDD9F5"}),
+          Plot.dot(trips, {x: "stops", y: "avgSpeed", stroke: "#412135"}),
+          Plot.lineY(caltrain, {x: "stops", y: "avgSpeed", stroke: colors.caltrain}),
+          Plot.lineY(bart, {x: "stops", y: "avgSpeed", stroke: colors.bart}),
+          Plot.lineY(vta, {x: "stops", y: "avgSpeed", stroke: colors['vta light rail']}),
        ]
       });
       el.replaceChildren(div(plt));
