@@ -226,6 +226,13 @@ export const playground = (container: HTMLElement) => {
     const caltrain = tripTimeTable(trainPresets.emu, linePresets.caltrainLocal);
     const bart = tripTimeTable(trainPresets.bart, linePresets.bartOrangeLine);
     const vta = tripTimeTable(trainPresets.vta, linePresets.vtaOrangeLine);
+    const metrics = [
+      ...caltrain.slice(1).map(i => ({...i, service: 'caltrain'})),
+      ...bart.slice(1).map(i => ({...i, service: 'bart'})),
+      ...vta.slice(1).map(i => ({...i, service: 'vta light rail'})),
+    ];
+    console.log(caltrain);
+    console.log(metrics);
     const colors = {
       'caltrain': '#F5D9E9',
       'bart': '#EDD9F3',
@@ -239,13 +246,19 @@ export const playground = (container: HTMLElement) => {
           domain: Object.keys(colors),
           range: Object.values(colors),
         },
+        y: {
+          grid: true,
+          label: "Average Speed (mph)",
+          transform: (f) => f/60 * MS2MPH,
+        },
         marks: [
           Plot.ruleY([0]),
           Plot.lineY(trips, {x: "stops", y: "avgSpeed", stroke: "#212021"}),
-          Plot.dot(trips, {x: "stops", y: "avgSpeed", stroke: "#412135"}),
-          Plot.lineY(caltrain, {x: "stops", y: "avgSpeed", stroke: colors.caltrain}),
-          Plot.lineY(bart, {x: "stops", y: "avgSpeed", stroke: colors.bart}),
-          Plot.lineY(vta, {x: "stops", y: "avgSpeed", stroke: colors['vta light rail']}),
+          Plot.dot(trips, {x: "stops", y: "avgSpeed", fill: "#412135"}),
+          Plot.lineY(metrics, {x: "stops", y: "avgSpeed", stroke: 'service', strokeLinecap: 'butt', strokeWidth: 5}),
+          Plot.text(metrics, Plot.selectLast({x: "stops", y: "avgSpeed", z: "service", text: "service", textAnchor: "start", dx: 3}))
+          //Plot.lineY(bart, {x: "stops", y: "avgSpeed", stroke: colors.bart, strokeLinecap: 'butt', strokeWidth: 5}),
+          //Plot.lineY(vta, {x: "stops", y: "avgSpeed", stroke: colors['vta light rail'], strokeLinecap: 'butt', strokeWidth: 5}),
        ]
       });
       el.replaceChildren(div(plt));
